@@ -2137,6 +2137,7 @@ fn handle_copy_mode(
     dest: &Path,
     options: &Options,
     context: &str,
+    dest_permissions: &Permissions,
     source_metadata: &Metadata,
     symlinked_files: &mut HashSet<FileInformation>,
     source_in_command_line: bool,
@@ -2181,6 +2182,7 @@ fn handle_copy_mode(
                 dest,
                 options,
                 context,
+                dest_permissions,
                 source_is_symlink,
                 source_is_fifo,
                 source_is_socket,
@@ -2205,6 +2207,7 @@ fn handle_copy_mode(
                             dest,
                             options,
                             context,
+                            dest_permissions,
                             source_is_symlink,
                             source_is_fifo,
                             source_is_socket,
@@ -2242,6 +2245,7 @@ fn handle_copy_mode(
                             dest,
                             options,
                             context,
+                            dest_permissions,
                             source_is_symlink,
                             source_is_fifo,
                             source_is_socket,
@@ -2258,6 +2262,7 @@ fn handle_copy_mode(
                     dest,
                     options,
                     context,
+                    dest_permissions,
                     source_is_symlink,
                     source_is_fifo,
                     source_is_socket,
@@ -2486,7 +2491,6 @@ fn copy_file(
             err.to_string()
         })?
     };
-    dbg!(&source_metadata); // This contains the perms
 
     let dest_metadata = dest.symlink_metadata().ok();
 
@@ -2497,7 +2501,6 @@ fn copy_file(
         options,
         context,
     )?;
-    dbg!(&dest_permissions);
 
     #[cfg(unix)]
     let source_is_fifo = source_metadata.file_type().is_fifo();
@@ -2515,6 +2518,7 @@ fn copy_file(
         dest,
         options,
         context,
+        &dest_permissions,
         &source_metadata,
         symlinked_files,
         source_in_command_line,
@@ -2529,6 +2533,7 @@ fn copy_file(
         print_verbose_output(options.parents, progress_bar, source, dest);
     }
 
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     // TODO: implement something similar to gnu's lchown
     if !dest_is_symlink {
         // Here, to match GNU semantics, we quietly ignore an error
@@ -2537,7 +2542,7 @@ fn copy_file(
         //
         // FWIW, the OS will throw an error later, on the write op, if
         // the user does not have permission to write to the file.
-        // fs::set_permissions(dest, dest_permissions).ok();
+        fs::set_permissions(dest, dest_permissions).ok();
     }
 
     if options.dereference(source_in_command_line) {
@@ -2647,6 +2652,7 @@ fn copy_helper(
     dest: &Path,
     options: &Options,
     context: &str,
+    dest_permissions: &Permissions,
     source_is_symlink: bool,
     source_is_fifo: bool,
     source_is_socket: bool,
@@ -2654,7 +2660,6 @@ fn copy_helper(
     created_parent_dirs: &mut HashSet<PathBuf>,
     #[cfg(unix)] source_is_stream: bool,
 ) -> CopyResult<()> {
-    dbg!("We get here");
     if options.parents {
         let parent = dest.parent().unwrap_or(dest);
         if created_parent_dirs.insert(parent.to_path_buf()) {
@@ -2675,10 +2680,10 @@ fn copy_helper(
     } else if source_is_symlink {
         copy_link(source, dest, symlinked_files, options)?;
     } else {
-        dbg!("and here");
         let copy_debug = copy_on_write(
             source,
             dest,
+            dest_permissions.mode(),
             options.reflink_mode,
             options.sparse_mode,
             context,
