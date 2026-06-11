@@ -204,7 +204,7 @@ impl Observer {
             /*
             NOTE: By enabling compare_contents, performance will be significantly impacted
             as all files will need to be read and hashed at each `poll_interval`.
-            However, this is necessary to pass: "gnu/tests/tail-2/F-vs-rename.sh"
+            However, this is necessary to pass: "gnu/tests/tail/F-vs-rename.sh"
             */
             .with_compare_contents(true);
         if self.use_polling || RecommendedWatcher::kind() == WatcherKind::PollWatcher {
